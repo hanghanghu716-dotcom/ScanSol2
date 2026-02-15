@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "460632623868",
+    "project_id": "scansol-platform-2026",
+    "storage_bucket": "scansol-platform-2026.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:460632623868:android:4aef907f993bd040a6e579",
+        "android_client_info": {
+          "package_name": "com.example.scansol2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCdupJt3-nspyZD9F9IgIIDRLqwR7zc-O8"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

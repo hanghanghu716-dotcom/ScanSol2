@@ -1,4 +1,6 @@
 // [설명] 가이드 데이터의 형식을 정의하는 파일입니다.
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 class Guide {
   String id;
   String companyId;
@@ -38,6 +40,12 @@ class Guide {
 
   // Firestore(클라우드)에서 데이터를 가져올 때 사용하는 도구입니다.
   factory Guide.fromFirestore(Map<String, dynamic> json) {
+    // 어떤 타입이 들어와도 문자열로 안전하게 바꿔주는 로직
+    String toStr(dynamic value) {
+      if (value is Timestamp) return value.toDate().toString(); // 타임스탬프면 변환
+      return value?.toString() ?? ''; // 나머지는 문자열화
+    }
+
     return Guide(
       id: json['id'] ?? '',
       companyId: json['companyId'] ?? 'KOGAS_WANJU',
@@ -53,11 +61,11 @@ class Guide {
       partsInfo: json['partsInfo'] ?? '',
       specInfo: json['specInfo'] ?? '',
       relationInfo: json['relationInfo'] ?? '',
-      createdAt: json['createdAt'] ?? json['date'] ?? '',
-      updatedAt: json['updatedAt'] ?? json['date'] ?? '',
+      // 수정 포인트: 안전하게 변환하여 대입
+      createdAt: toStr(json['createdAt'] ?? json['date']),
+      updatedAt: toStr(json['updatedAt'] ?? json['date']),
     );
   }
-
   // 데이터를 Firestore(클라우드)에 저장하기 쉬운 형태로 변환하는 도구입니다.
   Map<String, dynamic> toFirestore() => {
     'id': id,

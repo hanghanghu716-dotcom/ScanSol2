@@ -132,6 +132,19 @@ class _EditorPageState extends State<EditorPage> {
 
       await FirebaseFirestore.instance.collection('guides').doc(docId).set(newGuide.toFirestore());
 
+      // [신규 로직] 가이드 저장 성공 시 정비 로그를 자동으로 생성합니다.
+      String logType = widget.guide == null ? 'CHECK' : 'REPAIR'; // 신규 작성은 점검, 수정은 수리로 분류
+      String logTitle = widget.guide == null
+          ? "${_idController.text} 신규 가이드 등록"
+          : "${_idController.text} 가이드 내용 업데이트";
+
+      await FirebaseFirestore.instance.collection('maintenance_logs').add({
+        'type': logType,
+        'title': logTitle,
+        'userName': widget.user?.name ?? '익명 작업자',
+        'date': FieldValue.serverTimestamp(), // 서버 시간 기준 저장
+      });
+
       if (mounted) {
         // Navigator.pop(context); // 로딩창 닫기 (로컬 상태라 불필요)
         Navigator.pop(context); // 페이지 닫기

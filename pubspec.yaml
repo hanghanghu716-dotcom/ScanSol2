@@ -12,13 +12,14 @@ dependencies:
 
   firebase_core: ^3.0.0
   cloud_firestore: ^5.0.0
-  firebase_storage: ^12.0.0
-
+  firebase_storage: ^12.4.10
+  barcode: ^2.2.6
   google_fonts: ^6.1.0
 
   # QR 및 PDF 관련 (필수)
   pdf: ^3.10.0
   printing: ^5.11.0
+  http: ^1.1.0
 
   # 기타 사용 중인 패키지
   cupertino_icons: ^1.0.8
@@ -37,6 +38,14 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # 구글 폰트를 에셋으로 직접 다운로드하여 사용하는 경우 아래 설정을 추가합니다.
+  fonts:
+    - family: NotoSansKR
+      fonts:
+        - asset: assets/fonts/NotoSansKR-Regular.ttf
+        - asset: assets/fonts/NotoSansKR-Bold.ttf
+          weight: 700
 
   # [중요] 이미지가 있는 폴더 경로를 정확히 지정
   assets:

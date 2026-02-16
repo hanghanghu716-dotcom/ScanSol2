@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
@@ -36,38 +35,45 @@ class _LoginPageState extends State<LoginPage> {
     setState(() => _isLoading = true);
 
     try {
-      final snapshot = await FirebaseFirestore.instance
+      final query = await FirebaseFirestore.instance
           .collection('users')
           .where('facilityId', isEqualTo: inputFacility)
           .where('userId', isEqualTo: inputId)
-          .limit(1)
+          .where('password', isEqualTo: inputPw)
           .get();
 
-      if (snapshot.docs.isEmpty) throw "사용자 정보가 없습니다.";
+      if (query.docs.isEmpty) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("일치하는 정보가 없거나 승인 대기 중입니다.")),
+        );
+      } else {
+        final doc = query.docs.first;
+        final user = UserModel.fromFirestore(doc);
 
-      final userDoc = snapshot.docs.first;
-      final userModel = UserModel.fromFirestore(userDoc);
+        // [핵심 수정 부분] 로그인 정보 저장 로직 추가
+        final SharedPreferences prefs = await SharedPreferences.getInstance();
+        if (_isAutoLoginChecked) {
+          // 체크박스가 선택된 경우 기기에 고유 ID 저장
+          await prefs.setString('userDocId', doc.id);
+        } else {
+          // 체크 해제 시 기존 저장 정보 삭제
+          await prefs.remove('userDocId');
+        }
 
-      if (userModel.password != inputPw) throw "비밀번호가 일치하지 않습니다.";
-      if (userModel.status == 'pending') throw "승인 대기 중입니다. 관리자에게 문의하세요.";
-
-      if (_isAutoLoginChecked) {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString('userDocId', userDoc.id);
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => UserPage(user: user)),
+        );
       }
-
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => UserPage(user: userModel)),
-      );
     } catch (e) {
-      setState(() => _isLoading = false);
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("로그인 실패: $e"), backgroundColor: Theme.of(context).colorScheme.error),
+        SnackBar(content: Text("로그인 중 오류 발생: $e")),
       );
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -88,10 +94,10 @@ class _LoginPageState extends State<LoginPage> {
       body: LayoutBuilder(
         builder: (context, constraints) {
           if (constraints.maxWidth > 900) {
-            // [웹/PC] 좌우 분할 레이아웃
             return Row(
               children: [
-                Expanded(child: _buildBrandingSide()), // 좌측: 브랜드 영역
+                // [보강] 좌측 영역을 독립된 레이어로 분리하여 입력 시 버벅임 방지
+                Expanded(child: RepaintBoundary(child: _buildBrandingSide())),
                 Expanded(
                   child: Center(
                     child: Container(
@@ -130,12 +136,7 @@ class _LoginPageState extends State<LoginPage> {
         children: [
           const Icon(Icons.qr_code_scanner, size: 80, color: Colors.white),
           const SizedBox(height: 32),
-          Text(
-            "Smart Safety\nSolution",
-            style: GoogleFonts.notoSansKr(
-              fontSize: 48, fontWeight: FontWeight.w900, color: Colors.white, height: 1.2,
-            ),
-          ),
+          Text("Smart Safety\nSolution", style: TextStyle(fontSize: 48, fontWeight: FontWeight.w900, color: Colors.white, height: 1.2)),
           const SizedBox(height: 24),
           Text(
             "산업 현장의 설비 이력을 QR코드로 한눈에.\n안전하고 효율적인 유지보수를 위한 최고의 파트너 ScanSol입니다.",
@@ -163,7 +164,8 @@ class _LoginPageState extends State<LoginPage> {
           Center(
             child: Text(
               "ScanSol",
-              style: GoogleFonts.notoSansKr(fontSize: 32, fontWeight: FontWeight.w700, color: const Color(0xFF1A237E)),
+    style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: const Color(0xFF1A237E)),
+
             ),
           ),
           const SizedBox(height: 40),

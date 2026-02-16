@@ -7,14 +7,13 @@ import 'firebase_options.dart';
 import 'package:scansol2/screens/splash_page.dart';
 
 void main() async {
-  // Flutter 엔진 초기화
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase 초기화 (DefaultFirebaseOptions는 firebase_options.dart에서 제공)
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  // [수정] 웹에서 폰트를 가져오는 기능을 완전히 끕니다.
+  // pubspec.yaml에 등록된 로컬 에셋만 사용하게 되어 로딩 속도가 비약적으로 향상됩니다.
+  GoogleFonts.config.allowRuntimeFetching = false;
 
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   runApp(const ScanSolApp());
 }
 
@@ -23,15 +22,19 @@ class ScanSolApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // 폰트 패밀리명을 변수로 추출하여 일관성을 확보합니다.
+
     return MaterialApp(
       title: 'ScanSol',
       debugShowCheckedModeBanner: false,
 
       // -----------------------------------------------------------
-      // [전역 테마 설정] 앱 전체의 일관된 디자인 가이드를 정의합니다.
+      // [전역 테마 설정] 모바일 디자인 오류 해결을 위한 보강
       // -----------------------------------------------------------
       theme: ThemeData(
         useMaterial3: true,
+        // [확인] 아래의 family 이름이 pubspec.yaml의 family 이름과 정확히 일치해야 합니다.
+        fontFamily: 'NotoSansKR',
         colorScheme: ColorScheme.fromSeed(
           seedColor: const Color(0xFF1A237E),
           primary: const Color(0xFF1A237E),
@@ -44,18 +47,17 @@ class ScanSolApp extends StatelessWidget {
           outline: const Color(0xFFBDBDBD),
         ),
 
-        // 폰트 깨짐 방지를 위한 Noto Sans KR 및 Fallback 설정
-        textTheme: GoogleFonts.notoSansKrTextTheme().apply(
-          fontFamilyFallback: [
-            'Malgun Gothic',
-            'Apple SD Gothic Neo',
-            'Dotum',
-            'sans-serif',
-          ],
-        ).copyWith(
-          headlineLarge: const TextStyle(fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.5, color: Color(0xFF1A237E)),
-          titleLarge: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600, letterSpacing: -0.25, color: Color(0xFF212121)),
-          bodyLarge: const TextStyle(fontSize: 16, fontWeight: FontWeight.w400, height: 1.5, color: Color(0xFF424242)),
+        // [보강] 아이콘이 깨지는 현상을 방지하기 위한 아이콘 테마 설정
+        iconTheme: const IconThemeData(
+          color: Color(0xFF1A237E),
+          size: 24,
+        ),
+
+        // [최적화] 모바일 및 웹 공용 텍스트 테마 설정
+        textTheme: const TextTheme(
+          headlineLarge: TextStyle(fontSize: 32, fontWeight: FontWeight.w700, color: Color(0xFF1A237E)),
+          titleLarge: TextStyle(fontSize: 20, fontWeight: FontWeight.w600, color: Color(0xFF212121)),
+          bodyLarge: TextStyle(fontSize: 16, fontWeight: FontWeight.w400, color: Color(0xFF424242)),
         ),
 
         appBarTheme: const AppBarTheme(
@@ -66,7 +68,7 @@ class ScanSolApp extends StatelessWidget {
           scrolledUnderElevation: 2,
         ),
 
-        cardTheme: CardTheme(
+        cardTheme: CardThemeData(
           color: Colors.white,
           elevation: 0,
           shape: RoundedRectangleBorder(

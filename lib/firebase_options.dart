@@ -85,4 +85,5 @@ class DefaultFirebaseOptions {
     storageBucket: 'scansol-platform-2026.firebasestorage.app',
     measurementId: 'G-6S2Q4J94XG',
   );
+
 }

@@ -1,27 +1,27 @@
-// [설명] 가이드 데이터의 형식을 정의하는 파일입니다.
+// [운영 배포용] 가이드 데이터 모델 - 데이터 무결성 및 필드 표준화 버전
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 class Guide {
-  String id;
-  String companyId;
-  String title;
-  String content;
-  String date;
-  List<String> imageUrls;
-  String originalTitle;
-  String originalContent;
-  String proposerName;
-  bool isAnonymous;
-  String status;
-  String partsInfo;
-  String specInfo;
-  String relationInfo;
-  String createdAt;
-  String updatedAt;
+  final String id;
+  final String facilityId; // 프로젝트 표준 식별자
+  final String title;
+  final String content;
+  final String date;
+  final List<String> imageUrls; // 표준화된 사진 리스트 필드명
+  final String originalTitle;
+  final String originalContent;
+  final String proposerName;
+  final bool isAnonymous; // 익명 제안 여부
+  final String status; // approved, pending, deleted
+  final String partsInfo;
+  final String specInfo;
+  final String relationInfo;
+  final String createdAt;
+  final String updatedAt;
 
   Guide({
     required this.id,
-    required this.companyId,
+    required this.facilityId,
     required this.title,
     required this.content,
     required this.date,
@@ -38,42 +38,47 @@ class Guide {
     required this.updatedAt,
   });
 
-  // Firestore(클라우드)에서 데이터를 가져올 때 사용하는 도구입니다.
+  // Firestore 데이터를 앱 객체로 변환 (역직렬화 및 데이터 복구)
   factory Guide.fromFirestore(Map<String, dynamic> json) {
-    // 어떤 타입이 들어와도 문자열로 안전하게 바꿔주는 로직
-    String toStr(dynamic value) {
-      if (value is Timestamp) return value.toDate().toString(); // 타임스탬프면 변환
-      return value?.toString() ?? ''; // 나머지는 문자열화
+    // 날짜 및 시간 데이터의 타입 안전성 확보
+    String toSafeString(dynamic value) {
+      if (value is Timestamp) return value.toDate().toString();
+      return value?.toString() ?? '';
     }
 
     return Guide(
       id: json['id'] ?? '',
-      companyId: json['companyId'] ?? 'KOGAS_WANJU',
+      // facilityId와 구버전 필드(companyId)를 통합하여 데이터 유실 방지
+      facilityId: json['facilityId'] ?? json['companyId'] ?? '',
       title: json['title'] ?? '',
       content: json['content'] ?? '',
       date: json['date'] ?? '',
-      imageUrls: List<String>.from(json['imageUrls'] ?? []),
+      // imageUrls와 구버전 필드(images)를 검색하여 사진 데이터 복구
+      imageUrls: json['imageUrls'] != null
+          ? List<String>.from(json['imageUrls'])
+          : (json['images'] != null ? List<String>.from(json['images']) : []),
       originalTitle: json['originalTitle'] ?? json['title'] ?? '',
       originalContent: json['originalContent'] ?? json['content'] ?? '',
-      proposerName: json['proposerName'] ?? '관리자',
-      isAnonymous: json['isAnonymous'] ?? false,
+      proposerName: json['proposerName'] ?? '시스템',
+      // 익명성 필드의 논리값 정밀 매핑
+      isAnonymous: json['isAnonymous'] == true,
       status: json['status'] ?? 'approved',
       partsInfo: json['partsInfo'] ?? '',
       specInfo: json['specInfo'] ?? '',
       relationInfo: json['relationInfo'] ?? '',
-      // 수정 포인트: 안전하게 변환하여 대입
-      createdAt: toStr(json['createdAt'] ?? json['date']),
-      updatedAt: toStr(json['updatedAt'] ?? json['date']),
+      createdAt: toSafeString(json['createdAt'] ?? json['date']),
+      updatedAt: toSafeString(json['updatedAt'] ?? json['date']),
     );
   }
-  // 데이터를 Firestore(클라우드)에 저장하기 쉬운 형태로 변환하는 도구입니다.
+
+  // 앱 데이터를 Firestore 저장 형식으로 변환 (직렬화)
   Map<String, dynamic> toFirestore() => {
     'id': id,
-    'companyId': companyId,
+    'facilityId': facilityId, // 표준 명칭으로 일원화하여 저장
     'title': title,
     'content': content,
     'date': date,
-    'imageUrls': imageUrls,
+    'imageUrls': imageUrls, // 'images' 대신 'imageUrls'로 필드명 고정
     'originalTitle': originalTitle,
     'originalContent': originalContent,
     'proposerName': proposerName,

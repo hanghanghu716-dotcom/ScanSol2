@@ -110,9 +110,9 @@ class _UserPageState extends State<UserPage> {
     if (kIsWeb) return const Center(child: Text("PC 환경에서는 '대시보드' 탭에서 검색을 이용해주세요."));
 
     final double topPadding = MediaQuery.of(context).padding.top;
-    final double headerHeight = 80;
+    const double headerHeight = 80;
     final double screenHeight = MediaQuery.of(context).size.height;
-    final double scanBoxSize = 260.0;
+    const double scanBoxSize = 260.0;
     final double scanBoxTopPosition = (screenHeight - topPadding - headerHeight - scanBoxSize) / 2 - 40;
 
     return Stack(
@@ -190,166 +190,253 @@ class _UserPageState extends State<UserPage> {
     const double maxContentWidth = 1000.0;
     final double horizontalPadding = screenWidth > maxContentWidth ? (screenWidth - maxContentWidth) / 2 : 16.0;
 
-    return CustomScrollView(
-      slivers: [
-// [교정] _buildDashboardTab 함수 내 SliverAppBar 부분
-        SliverAppBar(
-          expandedHeight: 220.0, // 여유 있게 높이 조정
-          pinned: true,
-          backgroundColor: const Color(0xFF1A237E),
-          actions: [
-            if (widget.user.role == 'ADMIN')
-              IconButton(icon: const Icon(Icons.admin_panel_settings, color: Colors.white), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => const AdminPage()))),
-            IconButton(icon: const Icon(Icons.logout, color: Colors.white), onPressed: _handleLogout),
-            const SizedBox(width: 8),
-          ],
-          flexibleSpace: FlexibleSpaceBar(
-            // titlePadding을 제거하고 background 안에서 모든 정렬을 제어합니다.
-            background: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF1A237E), Color(0xFF3949AB)],
-                ),
-              ),
-              child: Stack(
-                children: [
-                  // 배경 아이콘 (우측 하단 고정)
-                  Positioned(
-                    right: 40,
-                    bottom: -30,
-                    child: Icon(Icons.analytics_outlined, size: 180, color: Colors.white.withOpacity(0.08)),
-                  ),
-                  // [교정] 텍스트 전체 그룹화 및 하단 여백 고정
-                  Positioned(
-                    left: horizontalPadding, // 본문 검색창과 시작 라인을 맞춤
-                    bottom: 30,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
+    return StreamBuilder<DocumentSnapshot>(
+        stream: FirebaseFirestore.instance.collection('facilities').doc(widget.user.facilityId).snapshots(),
+        builder: (context, facilitySnapshot) {
+          if (!facilitySnapshot.hasData) return const Center(child: CircularProgressIndicator());
+
+          final facilityData = facilitySnapshot.data!.data() as Map<String, dynamic>?;
+          final int maxMaps = facilityData?['maxMaps'] ?? 3;
+          final int maxGuides = facilityData?['maxGuides'] ?? 10;
+          final String planType = facilityData?['planType'] ?? 'FREE';
+
+          return CustomScrollView(
+            slivers: [
+              SliverAppBar(
+                expandedHeight: 220.0,
+                pinned: true,
+                backgroundColor: const Color(0xFF1A237E),
+                actions: [
+                  if (widget.user.role == 'ADMIN' || widget.user.role == 'SUPER_ADMIN')
+                    IconButton(
+                        icon: const Icon(Icons.admin_panel_settings, color: Colors.white),
+                        onPressed: () => Navigator.push(
+                            context,
+                            MaterialPageRoute(builder: (context) => AdminPage(user: widget.user))
+                        )
+                    ),
+                  IconButton(icon: const Icon(Icons.logout, color: Colors.white), onPressed: _handleLogout),
+                  const SizedBox(width: 8),
+                ],
+                flexibleSpace: FlexibleSpaceBar(
+                  background: Container(
+                    decoration: const BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [Color(0xFF1A237E), Color(0xFF3949AB)],
+                      ),
+                    ),
+                    child: Stack(
                       children: [
-                        // 1. 배지 (ScanSol Dashboard)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: const Text(
-                            "ScanSol Dashboard",
-                            style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
-                          ),
+                        Positioned(
+                          right: 40,
+                          bottom: -30,
+                          child: Icon(Icons.analytics_outlined, size: 180, color: Colors.white.withOpacity(0.08)),
                         ),
-                        const SizedBox(height: 10),
-                        // 2. 소속 정보
-                        Text(
-                          "${widget.user.department} | ${widget.user.facilityId}",
-                          style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13, letterSpacing: -0.5),
-                        ),
-                        const SizedBox(height: 4),
-                        // 3. 환영 인사
-                        Text(
-                          "반갑습니다, ${widget.user.name}님",
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: -1.0,
+                        Positioned(
+                          left: horizontalPadding,
+                          bottom: 30,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: planType == 'PRO' ? Colors.orange : Colors.white.withOpacity(0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  "ScanSol $planType Plan",
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 0.5),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Text(
+                                "${widget.user.department} | ${widget.user.facilityId}",
+                                style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 13, letterSpacing: -0.5),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                "반갑습니다, ${widget.user.name}님",
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 26,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: -1.0,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ],
                     ),
                   ),
-                ],
+                ),
               ),
-            ),
-          ),
-        ),
-
-
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
-          sliver: SliverToBoxAdapter(
-            child: TextField(
-              controller: _listSearchController,
-              decoration: InputDecoration(
-                hintText: "가이드 검색 (ID, 제목, 내용)",
-                prefixIcon: const Icon(Icons.search),
-                filled: true,
-                fillColor: Colors.white,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(horizontalPadding, 24, horizontalPadding, 0),
+                sliver: SliverToBoxAdapter(
+                  child: TextField(
+                    controller: _listSearchController,
+                    decoration: InputDecoration(
+                      hintText: "가이드 검색 (ID, 제목, 내용)",
+                      prefixIcon: const Icon(Icons.search),
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 24),
-          sliver: SliverToBoxAdapter(
-            child: SizedBox(
-              height: 125,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  _buildCountSummaryCard('guides', "전체 가이드", Icons.library_books, Colors.blue, query: FirebaseFirestore.instance.collection('guides').where('status', isEqualTo: 'approved')),
-                  const SizedBox(width: 16),
-                  _buildCountSummaryCard('maintenance_logs', "정비 이력", Icons.build_circle, Colors.orange),
-                  const SizedBox(width: 16),
-                  _buildRateSummaryCard(),
-                  const SizedBox(width: 16),
-                  // [핵심 교정] MapListPage 이동 시 widget.user 정보를 정확히 전달합니다.
-                  _buildMapLinkCard(),
-                ],
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 24),
+                sliver: SliverToBoxAdapter(
+                  child: SizedBox(
+                    height: 135,
+                    child: ListView(
+                      scrollDirection: Axis.horizontal,
+                      children: [
+                        // [교정] 승인된(approved) 가이드만 카운팅하도록 쿼리 수정
+                        _buildUsageSummaryCard(
+                          collection: 'guides',
+                          title: "가이드 슬롯",
+                          icon: Icons.library_books,
+                          color: Colors.blue,
+                          maxLimit: maxGuides,
+                          query: FirebaseFirestore.instance
+                              .collection('guides')
+                              .where('facilityId', isEqualTo: widget.user.facilityId)
+                              .where('status', isEqualTo: 'approved'),
+                        ),
+                        const SizedBox(width: 16),
+                        _buildUsageSummaryCard(
+                          collection: 'guide_maps',
+                          title: "맵 슬롯",
+                          icon: Icons.map_rounded,
+                          color: Colors.redAccent,
+                          maxLimit: maxMaps,
+                          query: FirebaseFirestore.instance
+                              .collection('guide_maps')
+                              .where('facilityId', isEqualTo: widget.user.facilityId),
+                          onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(builder: (context) => MapListPage(user: widget.user, isAdmin: false))
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        _buildRateSummaryCard(),
+                      ],
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-          sliver: const SliverToBoxAdapter(child: Padding(padding: EdgeInsets.only(bottom: 16), child: Text("최근 현장 활동", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)))),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-          sliver: SliverToBoxAdapter(child: _buildMaintenanceSection(context)),
-        ),
-        SliverPadding(
-          padding: EdgeInsets.fromLTRB(horizontalPadding, 32, horizontalPadding, 8),
-          sliver: SliverToBoxAdapter(child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [const Text("가이드 목록", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)), IconButton(icon: const Icon(Icons.sort), onPressed: () {})])),
-        ),
-        _buildGuideStreamList(horizontalPadding),
-        const SliverToBoxAdapter(child: SizedBox(height: 80)),
-      ],
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                sliver: const SliverToBoxAdapter(
+                    child: Padding(
+                        padding: EdgeInsets.only(bottom: 16),
+                        child: Text("최근 현장 활동", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))
+                    )
+                ),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                sliver: SliverToBoxAdapter(child: _buildMaintenanceSection(context)),
+              ),
+              SliverPadding(
+                padding: EdgeInsets.fromLTRB(horizontalPadding, 32, horizontalPadding, 8),
+                sliver: SliverToBoxAdapter(
+                    child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text("가이드 목록", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                          IconButton(icon: const Icon(Icons.sort), onPressed: () {})
+                        ]
+                    )
+                ),
+              ),
+              _buildGuideStreamList(horizontalPadding),
+              const SliverToBoxAdapter(child: SizedBox(height: 80)),
+            ],
+          );
+        }
     );
   }
 
-  // [신규] 맵 이동 전용 카드 (디자인 규격 일치)
-  Widget _buildMapLinkCard() {
-    return InkWell(
-      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => MapListPage(user: widget.user, isAdmin: false))),
-      child: Container(
-        width: 150,
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)]),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.map_rounded, color: Colors.redAccent, size: 24),
-            const Spacer(),
-            const Text("MAP", style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-            const Text("현장 가이드 맵", style: TextStyle(fontSize: 12, color: Colors.grey)),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCountSummaryCard(String collection, String title, IconData icon, Color color, {Query? query}) {
+  Widget _buildUsageSummaryCard({
+    required String collection,
+    required String title,
+    required IconData icon,
+    required Color color,
+    required int maxLimit,
+    required Query query,
+    VoidCallback? onTap,
+  }) {
     return StreamBuilder<QuerySnapshot>(
-      stream: (query ?? FirebaseFirestore.instance.collection(collection)).snapshots(),
+      stream: query.snapshots(),
       builder: (context, snapshot) {
         int count = snapshot.hasData ? snapshot.data!.docs.length : 0;
-        return _buildSummaryCard(title, "${count}건", icon, color);
+        double usageRatio = count / maxLimit;
+        bool isFull = count >= maxLimit;
+
+        return InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Container(
+            width: 160,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(
+                color: isFull ? Colors.red.withOpacity(0.5) : Colors.grey.shade200,
+                width: isFull ? 2 : 1,
+              ),
+              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Icon(icon, color: isFull ? Colors.red : color, size: 24),
+                    if (isFull)
+                      const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 16),
+                  ],
+                ),
+                const Spacer(),
+                RichText(
+                  text: TextSpan(
+                    style: const TextStyle(color: Colors.black, fontSize: 18, fontWeight: FontWeight.bold),
+                    children: [
+                      TextSpan(text: "$count", style: TextStyle(color: isFull ? Colors.red : Colors.black)),
+                      TextSpan(
+                          text: " / $maxLimit",
+                          style: TextStyle(color: Colors.grey.shade400, fontSize: 14, fontWeight: FontWeight.normal)
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: usageRatio.clamp(0.0, 1.0),
+                    backgroundColor: Colors.grey.shade100,
+                    valueColor: AlwaysStoppedAnimation<Color>(isFull ? Colors.red : color),
+                    minHeight: 4,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+              ],
+            ),
+          ),
+        );
       },
     );
   }
@@ -358,36 +445,63 @@ class _UserPageState extends State<UserPage> {
     return StreamBuilder<DocumentSnapshot>(
       stream: FirebaseFirestore.instance.collection('settings').doc('factory_stats').snapshots(),
       builder: (context, snapshot) {
-        String rate = snapshot.hasData && snapshot.data!.exists ? snapshot.data!['operation_rate'].toString() : "0";
-        return _buildSummaryCard("가동률", "$rate%", Icons.analytics, Colors.green);
+        String rateStr = snapshot.hasData && snapshot.data!.exists
+            ? snapshot.data!['operation_rate'].toString()
+            : "0";
+        double rateValue = double.tryParse(rateStr) ?? 0;
+        double progress = rateValue / 100.0;
+
+        return Container(
+          width: 160,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.grey.shade200),
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10)],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.analytics, color: Colors.green, size: 24),
+              const Spacer(),
+              Text("$rateStr%", style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress.clamp(0.0, 1.0),
+                  backgroundColor: Colors.grey.shade100,
+                  valueColor: AlwaysStoppedAnimation<Color>(progress > 0.8 ? Colors.green : Colors.orange),
+                  minHeight: 4,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text("실시간 가동률", style: TextStyle(fontSize: 12, color: Colors.grey)),
+            ],
+          ),
+        );
       },
     );
   }
 
-  Widget _buildSummaryCard(String title, String count, IconData icon, Color color) {
-    return Container(
-      width: 150,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16), border: Border.all(color: Colors.grey.shade200)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(icon, color: color, size: 24),
-          const Spacer(),
-          Text(count, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
-        ],
-      ),
-    );
-  }
-
-// [교정] 리스트 아이템 사이에만 구분선을 넣고, 마지막 선은 제거합니다.
   Widget _buildMaintenanceSection(BuildContext context) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('maintenance_logs').orderBy('date', descending: true).limit(3).snapshots(),
+      // [중요] 색인 생성이 필요한 복합 쿼리 구간입니다.
+      stream: FirebaseFirestore.instance
+          .collection('maintenance_logs')
+          .where('facilityId', isEqualTo: widget.user.facilityId)
+          .orderBy('date', descending: true)
+          .limit(3)
+          .snapshots(),
       builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          debugPrint("Maintenance Section Error: ${snapshot.error}");
+          return const Padding(padding: EdgeInsets.all(24), child: Center(child: Text("색인 생성 대기 중...")));
+        }
         if (!snapshot.hasData) return const Center(child: CircularProgressIndicator());
+
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) return const Padding(padding: EdgeInsets.all(24), child: Center(child: Text("최근 활동 기록이 없습니다.")));
 
@@ -398,12 +512,11 @@ class _UserPageState extends State<UserPage> {
             color: Colors.white,
             borderRadius: BorderRadius.circular(16),
             border: Border.all(color: Colors.grey.shade200),
-            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8)], // 미세한 그림자 추가로 입체감 부여
+            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8)],
           ),
-          // [수정 핵심] separatorBuilder를 사용하여 마지막 아이템 뒤에는 선이 생기지 않게 합니다.
           child: ListView.separated(
-            shrinkWrap: true, // CustomScrollView 내부에 있으므로 필수
-            physics: const NeverScrollableScrollPhysics(), // 스크롤 충돌 방지
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
             itemCount: logs.length,
             separatorBuilder: (context, index) => const Divider(height: 1, indent: 60),
             itemBuilder: (context, index) => _buildMaintenanceItem(logs[index]),
@@ -413,7 +526,6 @@ class _UserPageState extends State<UserPage> {
     );
   }
 
-// [교정] 개별 아이템 내부의 불필요한 Column과 Divider를 제거합니다.
   Widget _buildMaintenanceItem(MaintenanceLog log) {
     return ListTile(
       leading: CircleAvatar(
@@ -428,13 +540,19 @@ class _UserPageState extends State<UserPage> {
 
   Widget _buildGuideStreamList(double horizontalPadding) {
     return StreamBuilder<QuerySnapshot>(
-      stream: FirebaseFirestore.instance.collection('guides').where('status', isEqualTo: 'approved').snapshots(),
+      stream: FirebaseFirestore.instance
+          .collection('guides')
+          .where('facilityId', isEqualTo: widget.user.facilityId)
+          .where('status', isEqualTo: 'approved')
+          .snapshots(),
       builder: (context, snapshot) {
         if (!snapshot.hasData) return const SliverToBoxAdapter(child: Center(child: CircularProgressIndicator()));
         var guides = snapshot.data!.docs.map((doc) => Guide.fromFirestore(doc.data() as Map<String, dynamic>)).toList();
+
         if (_searchText.isNotEmpty) {
           guides = guides.where((g) => "${g.title} ${g.id}".toLowerCase().contains(_searchText.toLowerCase())).toList();
         }
+
         return SliverPadding(
           padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
           sliver: SliverList(delegate: SliverChildBuilderDelegate((context, index) => _buildGuideCard(guides[index]), childCount: guides.length)),
@@ -458,7 +576,11 @@ class _UserPageState extends State<UserPage> {
 
   Future<void> _processScanResult(String scannedId) async {
     setState(() => isScanCompleted = true);
-    final mapSnapshot = await FirebaseFirestore.instance.collection('guide_maps').get();
+    final mapSnapshot = await FirebaseFirestore.instance
+        .collection('guide_maps')
+        .where('facilityId', isEqualTo: widget.user.facilityId)
+        .get();
+
     GuideMap? targetMap;
     for (var doc in mapSnapshot.docs) {
       final map = GuideMap.fromFirestore(doc);
@@ -478,7 +600,11 @@ class _UserPageState extends State<UserPage> {
     showDialog(
       context: context,
       builder: (context) => StreamBuilder<QuerySnapshot>(
-        stream: FirebaseFirestore.instance.collection('guides').where('id', isEqualTo: scannedCode).snapshots(),
+        stream: FirebaseFirestore.instance
+            .collection('guides')
+            .where('facilityId', isEqualTo: widget.user.facilityId)
+            .where('id', isEqualTo: scannedCode)
+            .snapshots(),
         builder: (context, snapshot) {
           if (!snapshot.hasData) return const AlertDialog(content: CircularProgressIndicator());
           var docs = snapshot.data!.docs;

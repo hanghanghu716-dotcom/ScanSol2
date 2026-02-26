@@ -12,7 +12,7 @@ class FirebaseService {
       // 'guides'라는 문서함에 업체ID와 장비ID를 조합한 이름으로 저장합니다.
       await _firestore
           .collection('guides')
-          .doc('${guide.companyId}_${guide.id}')
+          .doc('${guide.facilityId}_${guide.id}')
           .set(guide.toFirestore());
 
       print("클라우드 저장 성공: ${guide.id}");

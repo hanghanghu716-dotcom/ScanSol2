@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/user_model.dart';
 
-// -----------------------------------------------------------
-// [리디자인] 5-2. 직원 관리 페이지 (카드형 UI 및 명확한 액션)
-// -----------------------------------------------------------
 class AdminUserPage extends StatefulWidget {
   const AdminUserPage({super.key});
 
@@ -47,6 +44,8 @@ class _AdminUserPageState extends State<AdminUserPage> {
         backgroundColor: const Color(0xFFF5F5F5),
         appBar: AppBar(
           title: const Text("직원 계정 관리"),
+          backgroundColor: const Color(0xFF1A237E),
+          foregroundColor: Colors.white,
           bottom: const TabBar(
             tabs: [
               Tab(text: "승인 요청", icon: Icon(Icons.person_add)),
@@ -106,6 +105,7 @@ class _AdminUserPageState extends State<AdminUserPage> {
   Widget _buildUserCard(UserModel user, bool isPending) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Row(
@@ -123,7 +123,8 @@ class _AdminUserPageState extends State<AdminUserPage> {
                   Text(user.name, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                   const SizedBox(height: 4),
                   Text("${user.department} | ${user.facilityId}", style: TextStyle(color: Colors.grey[600], fontSize: 13)),
-                  Text("ID: ${user.userId}", style: TextStyle(color: Colors.grey[400], fontSize: 12)),
+                  // [교정] userId 필드를 email로 변경하여 출력
+                  Text("Email: ${user.email}", style: TextStyle(color: Colors.grey[400], fontSize: 12)),
                 ],
               ),
             ),

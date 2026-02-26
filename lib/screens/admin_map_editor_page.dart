@@ -228,7 +228,10 @@ class _AdminMapEditorPageState extends State<AdminMapEditorPage> {
     final double screenWidth = MediaQuery.of(context).size.width;
     final bool isMobileDevice = !kIsWeb && (Platform.isAndroid || Platform.isIOS);
     final bool isMobileVersion = isMobileDevice || (screenWidth < 850);
-    final bool canEdit = widget.user.role.toUpperCase() == "ADMIN" && !isMobileVersion;
+
+    // [교정] 권한 체크 로직에 SUPER_ADMIN을 추가하여 관리자 기능을 복구합니다.
+    final bool canEdit = (widget.user.role.toUpperCase() == "ADMIN" ||
+        widget.user.role.toUpperCase() == "SUPER_ADMIN") && !isMobileVersion;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D1117),
@@ -242,7 +245,7 @@ class _AdminMapEditorPageState extends State<AdminMapEditorPage> {
             icon: const Icon(Icons.arrow_back, size: 28),
             onPressed: () {
               if (_isPrintMode) {
-                setState(() => _isPrintMode = false); // 인쇄 모드 종료 시 다시 '꽉 채우기'로 복귀
+                setState(() => _isPrintMode = false);
               } else {
                 Navigator.pop(context);
               }
@@ -265,6 +268,7 @@ class _AdminMapEditorPageState extends State<AdminMapEditorPage> {
                   label: "라벨", isActive: _showLabel, onTap: () => setState(() => _showLabel = !_showLabel),
                 ),
                 _buildToolbarDivider(),
+                // [복구 완료] canEdit 변수가 SUPER_ADMIN을 포함하므로 사진등록 버튼이 다시 나타납니다.
                 if (canEdit)
                   _buildLargeToolbarButton(
                     icon: _imageUrl == null ? Icons.add_photo_alternate : Icons.image_search,
@@ -281,7 +285,6 @@ class _AdminMapEditorPageState extends State<AdminMapEditorPage> {
                 label: "인쇄 설정",
                 isActive: _imageUrl != null,
                 onTap: _imageUrl == null ? null : () {
-                  // 인쇄 모드 진입 시 이미지 정보가 없으면 로드
                   if (_loadedImageInfo == null && _imageUrl != null) {
                     _fetchImageInfo(_imageUrl!);
                   }
@@ -312,14 +315,12 @@ class _AdminMapEditorPageState extends State<AdminMapEditorPage> {
             child: Container(
               color: const Color(0xFF21262D),
               child: Center(
-                // [핵심 변경 사항] 인쇄 모드일 때만 '원본 비율(AspectRatio)'을 적용합니다.
-                // 이렇게 하면 인쇄 모드에서는 이미지가 찌그러지지 않고 원본 비율대로 표시됩니다.
                 child: _isPrintMode && _loadedImageInfo != null
                     ? AspectRatio(
                   aspectRatio: _loadedImageInfo!.width / _loadedImageInfo!.height,
-                  child: _buildEditorContent(), // 공통 컨텐츠 위젯 호출
+                  child: _buildEditorContent(),
                 )
-                    : _buildEditorContent(), // 일반 모드에서는 그냥 꽉 채움
+                    : _buildEditorContent(),
               ),
             ),
           ),
@@ -332,25 +333,25 @@ class _AdminMapEditorPageState extends State<AdminMapEditorPage> {
       ),
     );
   }
-
   // [신규] 에디터 메인 컨텐츠 (LayoutBuilder 분리)
-  // AspectRatio 안에서도 정상 작동하도록 분리하였습니다.
   Widget _buildEditorContent() {
     return LayoutBuilder(
       builder: (context, constraints) {
         return GestureDetector(
-          onPanStart: (!_isPrintMode && widget.user.role.toUpperCase() == "ADMIN") ? (d) => setState(() => _startPos = d.localPosition) : null,
-          onPanUpdate: (!_isPrintMode && widget.user.role.toUpperCase() == "ADMIN") ? (d) => setState(() => _currentPos = d.localPosition) : null,
-          onPanEnd: (!_isPrintMode && widget.user.role.toUpperCase() == "ADMIN") ? (d) => _handleMappingEnd() : null,
+          // [교정] 드래그 시작, 업데이트, 종료 시에도 SUPER_ADMIN 권한을 체크하도록 보완합니다.
+          onPanStart: (!_isPrintMode && (widget.user.role.toUpperCase() == "ADMIN" || widget.user.role.toUpperCase() == "SUPER_ADMIN"))
+              ? (d) => setState(() => _startPos = d.localPosition) : null,
+          onPanUpdate: (!_isPrintMode && (widget.user.role.toUpperCase() == "ADMIN" || widget.user.role.toUpperCase() == "SUPER_ADMIN"))
+              ? (d) => setState(() => _currentPos = d.localPosition) : null,
+          onPanEnd: (!_isPrintMode && (widget.user.role.toUpperCase() == "ADMIN" || widget.user.role.toUpperCase() == "SUPER_ADMIN"))
+              ? (d) => _handleMappingEnd() : null,
           child: Stack(
             alignment: Alignment.center,
             children: [
-              // 1. 이미지 레이어
               if (_imageUrl != null)
                 Positioned.fill(
                   child: Image.network(
                     _imageUrl!, key: _imageKey,
-                    // [중요] 인쇄 모드에선 contain(비율유지), 일반 모드에선 fill(꽉채움)
                     fit: _isPrintMode ? BoxFit.contain : BoxFit.fill,
                     loadingBuilder: (context, child, p) => p == null ? child : const Center(child: CircularProgressIndicator(color: Colors.white)),
                   ),
@@ -358,14 +359,11 @@ class _AdminMapEditorPageState extends State<AdminMapEditorPage> {
               else
                 _buildEmptyState(),
 
-              // 2. 태그 레이어 (인쇄 모드에서도 보이도록 수정됨)
               ..._buildTagWidgets(constraints),
 
-              // 3. 인쇄 영역 오버레이 (인쇄 모드일 때만)
               if (_isPrintMode && _imageUrl != null)
                 _buildPrintOverlay(constraints),
 
-              // 4. 드래그 박스
               if (!_isPrintMode && _startPos != null && _currentPos != null) _buildDragBox(),
 
               if (_isUploading) const Center(child: CircularProgressIndicator(color: Colors.white)),
@@ -615,17 +613,114 @@ class _AdminMapEditorPageState extends State<AdminMapEditorPage> {
   }
 
   Future<void> _saveMapData() async {
-    if (_imageUrl == null) { ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("현장 지도 사진을 먼저 등록해주세요."))); return; }
+    // 1. 사전 검증: 이미지 등록 여부 확인
+    if (_imageUrl == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("현장 지도 사진을 먼저 등록해주세요."))
+      );
+      return;
+    }
+
     try {
-      showDialog(context: context, barrierDismissible: false, builder: (context) => const Center(child: CircularProgressIndicator()));
+      // 로딩 표시 시작
+      showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (context) => const Center(child: CircularProgressIndicator())
+      );
+
+      final String facilityId = widget.user.facilityId;
+
+      // -----------------------------------------------------------
+      // [신규] 요금제 맵 슬롯 한도 체크 로직 (Business Logic)
+      // -----------------------------------------------------------
+      // 2-1. 사업장의 요금제 한도(maxMaps) 조회
+      final facilityDoc = await FirebaseFirestore.instance
+          .collection('facilities')
+          .doc(facilityId)
+          .get();
+
+      if (!facilityDoc.exists) throw '사업장 정보를 찾을 수 없습니다.';
+
+      int maxMaps = facilityDoc.data()?['maxMaps'] ?? 3; // 기본값 3
+
+      // 2-2. 현재 등록된 맵 개수 조회 (해당 사업장의 전체 맵 카운트)
+      final mapsQuery = await FirebaseFirestore.instance
+          .collection('guide_maps')
+          .where('facilityId', isEqualTo: facilityId)
+          .get();
+
+      int currentMapCount = mapsQuery.docs.length;
+
+      // 2-3. 신규 생성(widget.mapId == null) 시에만 한도 체크 실행
+      if (widget.mapId == null && currentMapCount >= maxMaps) {
+        if (mounted) {
+          Navigator.pop(context); // 로딩 다이얼로그 닫기
+          showDialog(
+            context: context,
+            builder: (context) => AlertDialog(
+              title: const Text("맵 슬롯 한도 초과"),
+              content: Text(
+                  "현재 사업장의 요금제에서 제공하는 맵 슬롯($maxMaps개)을 모두 사용하였습니다.\n"
+                      "추가 맵을 등록하시려면 유료 슬롯을 구매하거나 기존 맵을 삭제하십시오."
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("확인"),
+                ),
+              ],
+            ),
+          );
+        }
+        return; // 한도 초과 시 저장 프로세스 중단
+      }
+      // -----------------------------------------------------------
+
+      // 3. 데이터 구조 준비 (멀티테넌시를 위한 facilityId 필드 포함)
       final Map<String, dynamic> mapData = {
-        'title': _titleController.text, 'imageUrl': _imageUrl, 'tags': _tempTags.map((t) => t.toMap()).toList(),
-        'updatedAt': FieldValue.serverTimestamp(), 'depth': widget.mapId != null ? _savedDepth : 0,
+        'title': _titleController.text.trim(),
+        'imageUrl': _imageUrl,
+        'facilityId': facilityId, // 사업장 식별자 반드시 포함
+        'tags': _tempTags.map((t) => t.toMap()).toList(),
+        'updatedAt': FieldValue.serverTimestamp(),
+        'depth': widget.mapId != null ? _savedDepth : 0,
       };
-      if (widget.mapId != null) { await FirebaseFirestore.instance.collection('guide_maps').doc(widget.mapId).update(mapData); }
-      else { mapData['createdAt'] = FieldValue.serverTimestamp(); mapData['authorName'] = widget.user.name; mapData['authorId'] = widget.user.userId; mapData['parentIds'] = []; await FirebaseFirestore.instance.collection('guide_maps').add(mapData); }
-      if (mounted) { Navigator.pop(context); Navigator.pop(context); ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("성공적으로 저장되었습니다."))); }
-    } catch (e) { if (mounted) Navigator.pop(context); debugPrint("저장 에러: $e"); ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("저장 실패: $e"))); }
+
+      // 4. Firestore 저장/업데이트 수행
+      if (widget.mapId != null) {
+        // 기존 맵 수정
+        await FirebaseFirestore.instance
+            .collection('guide_maps')
+            .doc(widget.mapId)
+            .update(mapData);
+      } else {
+        // 신규 맵 생성
+        mapData['createdAt'] = FieldValue.serverTimestamp();
+        mapData['authorName'] = widget.user.name;
+        mapData['authorId'] = widget.user.email; // 이메일 기반 식별자 적용
+        mapData['parentIds'] = [];
+
+        await FirebaseFirestore.instance.collection('guide_maps').add(mapData);
+      }
+
+      // 5. 완료 처리 및 화면 이동
+      if (mounted) {
+        Navigator.pop(context); // 로딩 다이얼로그 닫기
+        Navigator.pop(context); // 에디터 화면 닫기
+        ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("현장 맵이 성공적으로 저장되었습니다."), backgroundColor: Colors.green)
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        Navigator.pop(context); // 로딩 다이얼로그 닫기
+        debugPrint("맵 저장 에러: $e");
+        ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("저장 실패: $e"), backgroundColor: Colors.red)
+        );
+      }
+    }
   }
 
   List<Widget> _buildTagWidgets(BoxConstraints constraints) {

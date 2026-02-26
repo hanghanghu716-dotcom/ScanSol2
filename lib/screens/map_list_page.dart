@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/foundation.dart' show kIsWeb; // 웹 확인을 위해 추가
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/guide_map_model.dart';
 import '../models/user_model.dart';
 import '../widgets/node_connector_painter.dart';
 import 'admin_map_editor_page.dart';
-import 'package:vector_math/vector_math_64.dart' show Vector3; // 이 줄을 추가합니다.
+import 'package:vector_math/vector_math_64.dart' show Vector3;
 
 class MapListPage extends StatefulWidget {
   final bool isAdmin;
@@ -34,13 +35,15 @@ class _MapListPageState extends State<MapListPage> {
   Offset? _dragStartMousePos;
   Offset? _dragStartNodePos;
 
+  // 편집 가능 여부 확인 (관리자 AND 웹 환경)
+  bool get _canEdit => widget.isAdmin && kIsWeb;
+
   @override
   void dispose() {
     _transformationController.dispose();
     super.dispose();
   }
 
-  // ... (기존 _isCyclic, _saveForUndo, _exorciseGhostConnections, _handleUndo, _deleteNode, _disconnectAllParents, _savePosition, _connectNodes 함수들은 그대로 유지)
   bool _isCyclic(String currentId, String targetParentId, List<GuideMap> allMaps) {
     if (currentId == targetParentId) return true;
     final targetNode = allMaps.where((m) => m.id == targetParentId).firstOrNull;
@@ -56,25 +59,10 @@ class _MapListPageState extends State<MapListPage> {
     _undoStack.add({'type': actionType, 'data': data});
   }
 
-  Future<void> _exorciseGhostConnections() async {
-    // (기존 코드와 동일)
-    print("👻 유령 연결 퇴치 시작...");
-    final snapshot = await FirebaseFirestore.instance.collection('guide_maps').get();
-    final batch = FirebaseFirestore.instance.batch();
-    for (var doc in snapshot.docs) {
-      batch.update(doc.reference, {'parentIds': [], 'depth': 0});
-    }
-    await batch.commit();
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("✨ 모든 연결이 초기화되었습니다. 앱을 새로고침 하세요."), backgroundColor: Colors.redAccent)
-      );
-    }
-  }
+  // [수정] _exorciseGhostConnections 함수(전체 삭제/초기화) 제거됨
 
   Future<void> _handleUndo() async {
-    // (기존 코드와 동일)
-    if (_undoStack.isEmpty) return;
+    if (!_canEdit || _undoStack.isEmpty) return;
     final lastAction = _undoStack.removeLast();
     final data = lastAction['data'];
     try {
@@ -92,7 +80,7 @@ class _MapListPageState extends State<MapListPage> {
   }
 
   Future<void> _deleteNode(GuideMap map) async {
-    // (기존 코드와 동일)
+    if (!_canEdit) return;
     _saveForUndo('delete', {'id': map.id, 'data': map.toFirestore()});
     try {
       final children = await FirebaseFirestore.instance.collection('guide_maps')
@@ -111,7 +99,7 @@ class _MapListPageState extends State<MapListPage> {
   }
 
   Future<void> _disconnectAllParents(String childId) async {
-    // (기존 코드와 동일)
+    if (!_canEdit) return;
     try {
       await FirebaseFirestore.instance.collection('guide_maps').doc(childId).update({'parentIds': [], 'depth': 0});
     } catch (e) {
@@ -120,7 +108,6 @@ class _MapListPageState extends State<MapListPage> {
   }
 
   Future<void> _savePosition(String id, Offset pos, {bool saveUndo = true}) async {
-    // (기존 코드와 동일)
     try {
       await FirebaseFirestore.instance.collection('guide_maps').doc(id).update({'offsetX': pos.dx, 'offsetY': pos.dy});
     } catch (e) {
@@ -129,8 +116,7 @@ class _MapListPageState extends State<MapListPage> {
   }
 
   Future<void> _connectNodes(String parentId, String childId, List<GuideMap> allMaps) async {
-    // (기존 코드와 동일)
-    if (parentId == childId) return;
+    if (!_canEdit || parentId == childId) return;
     if (_isCyclic(childId, parentId, allMaps)) {
       if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("순환 연결은 불가능합니다."), backgroundColor: Colors.orange));
       return;
@@ -178,7 +164,7 @@ class _MapListPageState extends State<MapListPage> {
     return KeyboardListener(
       focusNode: FocusNode()..requestFocus(),
       onKeyEvent: (event) {
-        if (event is KeyDownEvent && HardwareKeyboard.instance.isControlPressed && event.logicalKey == LogicalKeyboardKey.keyZ) {
+        if (_canEdit && event is KeyDownEvent && HardwareKeyboard.instance.isControlPressed && event.logicalKey == LogicalKeyboardKey.keyZ) {
           _handleUndo();
         }
       },
@@ -213,9 +199,6 @@ class _MapListPageState extends State<MapListPage> {
                   constrained: false,
                   boundaryMargin: const EdgeInsets.all(2000),
                   minScale: 0.1, maxScale: 2.5,
-                  // [요청 3 해결] 줌 감도 조절
-                  // scaleFactor의 기본값은 200입니다. 숫자가 높을수록 줌 변화량이 작아져(둔해져) 부드럽게 느껴집니다.
-                  // 800~1000 정도로 설정하면 휠 한 칸당 줌 변화폭이 줄어듭니다.
                   scaleFactor: 1000.0,
                   child: Container(
                     key: _canvasKey,
@@ -234,7 +217,6 @@ class _MapListPageState extends State<MapListPage> {
                     ),
                   ),
                 ),
-                // [요청 1 해결] 미니맵에 뷰포트 표시 (TransformationController 전달)
                 Positioned(
                     top: 20, right: 20,
                     child: _buildMinimap(allMaps, MediaQuery.of(context).size)
@@ -243,7 +225,8 @@ class _MapListPageState extends State<MapListPage> {
             );
           },
         ),
-        floatingActionButton: widget.isAdmin ? _buildFAB(context) : null,
+        // [수정] 편집 가능할 때만 FAB 표시 (전체 초기화 버튼 삭제됨)
+        floatingActionButton: _canEdit ? _buildFAB(context) : null,
       ),
     );
   }
@@ -259,17 +242,17 @@ class _MapListPageState extends State<MapListPage> {
         clipBehavior: Clip.none,
         children: [
           MouseRegion(
-            cursor: SystemMouseCursors.click,
+            cursor: _canEdit ? SystemMouseCursors.click : SystemMouseCursors.basic,
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onPanStart: (details) {
+              onPanStart: _canEdit ? (details) {
                 setState(() {
                   _draggingSourceId = mapData.id;
                   _dragStartMousePos = details.globalPosition;
                   _dragStartNodePos = Offset(mapData.offsetX, mapData.offsetY);
                 });
-              },
-              onPanUpdate: (details) {
+              } : null,
+              onPanUpdate: _canEdit ? (details) {
                 if (_dragStartMousePos == null || _dragStartNodePos == null) return;
                 setState(() {
                   double currentScale = _transformationController.value.getMaxScaleOnAxis();
@@ -280,63 +263,65 @@ class _MapListPageState extends State<MapListPage> {
                     _dragStartNodePos!.dy + (deltaY / currentScale),
                   );
                 });
-              },
-              onPanEnd: (details) {
+              } : null,
+              onPanEnd: _canEdit ? (details) {
                 if (_temporaryPositions.containsKey(mapData.id)) {
                   _saveForUndo('position', {'id': mapData.id, 'oldPos': _dragStartNodePos, 'newPos': _temporaryPositions[mapData.id]});
                   _savePosition(mapData.id, _temporaryPositions[mapData.id]!);
                 }
                 setState(() { _draggingSourceId = null; _potentialTargetId = null; });
-              },
+              } : null,
               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminMapEditorPage(user: widget.user, mapId: mapData.id))),
               child: _buildNodeCard(mapData, isSource: isDragging, isTarget: isPotentialTarget),
             ),
           ),
+
+          // 왼쪽 포트는 항상 표시 (시각적 일관성)
           Positioned(left: -8, top: 50, child: _buildConnectionPort(Icons.circle, Colors.grey)),
 
-          Positioned(
-            right: -8, top: 50,
-            // [요청 2 해결] MouseRegion으로 감싸서 커서를 손가락(click) 모양으로 변경
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onPanStart: (details) {
-                  setState(() {
-                    _draggingSourceId = mapData.id;
-                    _dragLineStart = Offset(mapData.offsetX + 300, mapData.offsetY + 60);
-                    _dragLineEnd = _dragLineStart;
-                  });
-                },
-                onPanUpdate: (details) {
-                  final RenderBox? renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
-                  if (renderBox != null) {
-                    Offset localOffset = renderBox.globalToLocal(details.globalPosition);
+          // [수정] 편집 가능(웹+관리자)할 때만 오른쪽 연결 포트 표시
+          if (_canEdit)
+            Positioned(
+              right: -8, top: 50,
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onPanStart: (details) {
                     setState(() {
-                      _dragLineEnd = localOffset;
-                      _updatePotentialTarget(_dragLineEnd!.dx, _dragLineEnd!.dy, allMaps, mapData.id);
+                      _draggingSourceId = mapData.id;
+                      _dragLineStart = Offset(mapData.offsetX + 300, mapData.offsetY + 60);
+                      _dragLineEnd = _dragLineStart;
                     });
-                  }
-                },
-                onPanEnd: (details) async {
-                  if (_potentialTargetId != null && _draggingSourceId != null) {
-                    await _connectNodes(_draggingSourceId!, _potentialTargetId!, allMaps);
-                  }
-                  setState(() { _draggingSourceId = null; _potentialTargetId = null; _dragLineStart = null; _dragLineEnd = null; });
-                },
-                child: _buildConnectionPort(Icons.arrow_right_alt, _dragLineStart != null && _draggingSourceId == mapData.id ? Colors.orange : const Color(0xFF1A237E)),
+                  },
+                  onPanUpdate: (details) {
+                    final RenderBox? renderBox = _canvasKey.currentContext?.findRenderObject() as RenderBox?;
+                    if (renderBox != null) {
+                      Offset localOffset = renderBox.globalToLocal(details.globalPosition);
+                      setState(() {
+                        _dragLineEnd = localOffset;
+                        _updatePotentialTarget(_dragLineEnd!.dx, _dragLineEnd!.dy, allMaps, mapData.id);
+                      });
+                    }
+                  },
+                  onPanEnd: (details) async {
+                    if (_potentialTargetId != null && _draggingSourceId != null) {
+                      await _connectNodes(_draggingSourceId!, _potentialTargetId!, allMaps);
+                    }
+                    setState(() { _draggingSourceId = null; _potentialTargetId = null; _dragLineStart = null; _dragLineEnd = null; });
+                  },
+                  child: _buildConnectionPort(Icons.arrow_right_alt, _dragLineStart != null && _draggingSourceId == mapData.id ? Colors.orange : const Color(0xFF1A237E)),
+                ),
               ),
             ),
-          ),
         ],
       ),
     );
   }
 
-  // [수정] 미니맵에 '현재 보고 있는 영역(Viewport)'을 표시하는 기능 추가
   Widget _buildMinimap(List<GuideMap> maps, Size screenSize) {
     const double miniMapSize = 150.0;
-    final double scale = miniMapSize / canvasWidth; // 미니맵 축소 비율 (0.03배)
+    final double scale = miniMapSize / canvasWidth;
 
     return Container(
       width: miniMapSize, height: miniMapSize,
@@ -348,40 +333,30 @@ class _MapListPageState extends State<MapListPage> {
       ),
       child: Stack(
         children: [
-          // 1. 노드 점들 표시
           ...maps.map((m) => Positioned(
               left: m.offsetX * scale,
               top: m.offsetY * scale,
               child: Container(width: 4, height: 4, decoration: const BoxDecoration(color: Color(0xFF1A237E), shape: BoxShape.circle))
           )),
-
-          // 2. [핵심] 현재 뷰포트(내 화면) 표시
-          // TransformationController의 값을 감시하여 실시간으로 빨간 박스를 그립니다.
           ValueListenableBuilder(
             valueListenable: _transformationController,
             builder: (context, Matrix4 matrix, child) {
-              // InteractiveViewer의 매트릭스에서 현재 상태 추출
               final double currentScale = matrix.getMaxScaleOnAxis();
               final Vector3 translation = matrix.getTranslation();
-
-              // 화면 좌표계 -> 캔버스 좌표계 역변환 공식
-              // 뷰포트의 왼쪽 위 좌표 (Canvas 기준) = -translation / scale
               final double viewportX = -translation.x / currentScale;
               final double viewportY = -translation.y / currentScale;
-
-              // 뷰포트의 크기 (Canvas 기준) = 화면 크기 / scale
               final double viewportW = screenSize.width / currentScale;
               final double viewportH = screenSize.height / currentScale;
 
               return Positioned(
-                left: viewportX * scale, // 미니맵 비율 적용
+                left: viewportX * scale,
                 top: viewportY * scale,
                 child: Container(
                   width: viewportW * scale,
                   height: viewportH * scale,
                   decoration: BoxDecoration(
-                    border: Border.all(color: Colors.redAccent, width: 2), // 빨간색 테두리
-                    color: Colors.redAccent.withOpacity(0.1), // 내부 살짝 붉게
+                    border: Border.all(color: Colors.redAccent, width: 2),
+                    color: Colors.redAccent.withOpacity(0.1),
                   ),
                 ),
               );
@@ -392,12 +367,11 @@ class _MapListPageState extends State<MapListPage> {
     );
   }
 
-  // (이하 _buildNodeCard, _buildConnectionPort 등은 기존 동일)
   Widget _buildNodeCard(GuideMap mapData, {bool isSource = false, bool isTarget = false}) {
-    // (기존 코드와 동일)
     Color borderColor = const Color(0xFF1A237E).withOpacity(0.2);
     if (isSource) borderColor = Colors.orange;
     if (isTarget) borderColor = Colors.greenAccent[700]!;
+
     return Container(
       width: 300,
       padding: const EdgeInsets.all(16),
@@ -415,8 +389,11 @@ class _MapListPageState extends State<MapListPage> {
               Icon(Icons.account_tree_outlined, color: isSource ? Colors.orange : const Color(0xFF1A237E), size: 20),
               const SizedBox(width: 8),
               Expanded(child: Text(mapData.title, style: TextStyle(fontWeight: FontWeight.bold, color: isSource ? Colors.orange : const Color(0xFF1A237E)), overflow: TextOverflow.ellipsis)),
-              if (widget.isAdmin) IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(), icon: const Icon(Icons.delete_forever, size: 20, color: Colors.redAccent), onPressed: () => _deleteNode(mapData)),
-              if (mapData.parentIds.isNotEmpty) IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(), icon: const Icon(Icons.link_off, size: 18, color: Colors.blueGrey), onPressed: () => _disconnectAllParents(mapData.id)),
+              // [수정] 편집 가능할 때만 삭제 및 링크 해제 버튼 표시
+              if (_canEdit) ...[
+                IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(), icon: const Icon(Icons.delete_forever, size: 20, color: Colors.redAccent), onPressed: () => _deleteNode(mapData)),
+                if (mapData.parentIds.isNotEmpty) IconButton(padding: EdgeInsets.zero, constraints: const BoxConstraints(), icon: const Icon(Icons.link_off, size: 18, color: Colors.blueGrey), onPressed: () => _disconnectAllParents(mapData.id)),
+              ]
             ],
           ),
           const Divider(height: 20),
@@ -437,34 +414,11 @@ class _MapListPageState extends State<MapListPage> {
   }
 
   Widget _buildFAB(BuildContext context) {
-    // 유령 퇴치 버튼 포함한 기존 로직 유지
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.end,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        FloatingActionButton(
-          heroTag: 'ghost_fix_btn',
-          onPressed: () async {
-            bool? confirm = await showDialog(
-              context: context,
-              builder: (context) => AlertDialog(
-                title: const Text("연결 초기화"),
-                content: const Text("모든 노드의 연결 선을 끊고 초기화하시겠습니까?\n(데이터는 유지되지만 연결 관계는 삭제됩니다.)"),
-                actions: [
-                  TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("취소")),
-                  TextButton(onPressed: () => Navigator.pop(context, true), child: const Text("확인", style: TextStyle(color: Colors.red))),
-                ],
-              ),
-            );
-            if (confirm == true) await _exorciseGhostConnections();
-          },
-          backgroundColor: Colors.red,
-          tooltip: '모든 연결 관계 초기화',
-          child: const Icon(Icons.cleaning_services),
-        ),
-        const SizedBox(height: 16),
-        FloatingActionButton(onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminMapEditorPage(user: widget.user, mapId: null))), backgroundColor: const Color(0xFF1A237E), child: const Icon(Icons.add, color: Colors.white)),
-      ],
+    // [수정] 전체 초기화 버튼 로직 삭제 및 추가 버튼만 유지
+    return FloatingActionButton(
+        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (context) => AdminMapEditorPage(user: widget.user, mapId: null))),
+        backgroundColor: const Color(0xFF1A237E),
+        child: const Icon(Icons.add, color: Colors.white)
     );
   }
 }
